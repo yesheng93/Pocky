@@ -1,0 +1,11 @@
+argh==0.26.2
+cffi==1.11.2
+Jinja2==2.9.6
+Markdown==2.6.9
+markdown2==2.3.4
+MarkupSafe==1.0
+pathtools==0.1.2
+pycparser==2.18
+Pygments==2.2.0
+PyYAML==3.12
+watchdog==0.8.3
