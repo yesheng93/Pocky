@@ -1,0 +1,27 @@
+# Permalinks
+permalink:      /:year-:month-:day/:title
+
+# Setup
+title:          YeSheng
+paginate:       5
+baseurl:        ""
+url:            "https://yesheng93.github.io"
+
+# Assets
+sass:
+  sass_dir:     _sass
+  style:        :compressed
+
+# Build settings
+markdown:       kramdown
+
+# About
+author:
+  name:         Ye Sheng
+  url:          http://yesheng93.github.com
+  email:        yesheng0523@gmail.com
+
+# Gems
+gems:
+  - jekyll-paginate
+
