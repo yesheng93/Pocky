@@ -1,15 +1,23 @@
 import handlers
+from processors import FixPostDateAndPath, SortPostsByDateProcessor
 
 default_site_handlers = handlers.DefaultSiteTagHandler
 site_handlers = [
     handlers.DefaultSiteTagHandler
 ]
 
-default_post_handlers = handlers.DefaultPogeTagHandler
+default_page_handlers = handlers.DefaultPageTagHandler
 
-post_handlers = [
-    handlers.DefaultPogeTagHandler,
+page_handlers = [
+    handlers.DefaultPageTagHandler,
     handlers.PostCategoryHandler
+]
+site_processors = [
+    SortPostsByDateProcessor
+]
+
+page_processors = [
+    FixPostDateAndPath
 ]
 
 POSTS_DIR = 'posts'

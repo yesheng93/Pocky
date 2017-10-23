@@ -1,7 +1,6 @@
 import distutils.dir_util
 import errno
 import os
-import re
 import shutil
 from io import open
 
@@ -25,11 +24,11 @@ def register_handlers(handlers):
 
 
 site_handlers = register_handlers(settings.site_handlers)
-posts_handlers = register_handlers(settings.post_handlers)
+page_handlers = register_handlers(settings.page_handlers)
 
 print 'handler registered'
 print site_handlers
-print posts_handlers
+print page_handlers
 
 
 class Dict(dict):
@@ -43,36 +42,34 @@ class Dict(dict):
         self[key] = value
 
 
-class SiteContext(Dict):
+class Site(Dict):
     def __init__(self):
-        self.site = Dict(posts=[], pages=[])
-        self.posts = self.site.posts
-        self.pages = self.site.pages
+        self.posts = []
+        self.pages = []
 
-    def collect_pages(self):
-        del self.pages[:]
-        for _page in os.listdir(_SITE_DIR):
-            path = os.path.join(_SITE_DIR, _page)
-            page = Poge(site=self)
+    def _collect_from_dir(self, dir, is_post=False):
+        for _page in os.listdir(dir):
+            path = os.path.join(dir, _page)
+            page = Page()
+            page._site = self
+            page.is_post = is_post
             page.load_from_path(path)
-            page.site = self
-            page.fix_page_path()
-            self.pages.append(page)
-
-    def collect_posts(self):
-        del self.posts[:]
-        for _post in os.listdir(_POSTS_DIR):
-            path = os.path.join(_POSTS_DIR, _post)
-            post = Poge(site=self)
-            post.load_from_path(path)
-            post.fix_post_path()
-            self.posts.append(post)
+            page.load_yaml_tag()
+            page.run_processor()
+            if is_post:
+                self.posts.append(page)
+            else:
+                self.pages.append(page)
 
     def collect_poges(self):
         print 'collecting poges'
-        self.collect_pages()
-        self.collect_posts()
+        self._collect_from_dir(_POSTS_DIR, is_post=True)
+        self._collect_from_dir(_SITE_DIR, is_post=False)
         print '{} posts and {} pages collected'.format(len(self.posts), len(self.pages))
+
+    def run_processor(self):
+        for processor in settings.site_processors:
+            processor.process(self)
 
     def generate_site(self):
         print 'generating files'
@@ -81,12 +78,13 @@ class SiteContext(Dict):
             poges.save_to_file()
         print 'files generated'
 
-    def load_context_from_config(self):
+    def configuration(self):
         with open('_config.yml') as f:
             # use safe_load instead load
             dataMap = yaml.safe_load(f)
-            for tag in generate_tag_from_dict(dataMap):
+            for tag in generate_tag_from_dict(dataMap, []):
                 self._handle_tag(tag)
+        print 'finishedloading'
 
     def _handle_tag(self, tag):
         handler = site_handlers[tag.path] if tag.path in site_handlers else settings.default_site_handlers
@@ -102,7 +100,7 @@ class Tag(object):
         return str(self.path) + '  ' + str(self.value)
 
 
-def generate_tag_from_dict(dic, tag_containers=[], root=''):
+def generate_tag_from_dict(dic, tag_containers, root=''):
     for k, v in dic.iteritems():
         new_root = root + '/' + k
         if isinstance(v, dict):
@@ -112,68 +110,57 @@ def generate_tag_from_dict(dic, tag_containers=[], root=''):
     return tag_containers
 
 
-class Poge(Dict):
+class Page(Dict):
     def __init__(self):
         self.content = None
         self.rendered_content = None
         self.path = None
         self.layout = None
+        self._site = None
+        self.is_post = False
+
+    def load_from_path(self, path):
+        with open(path, 'r', encoding='utf-8') as f:
+            self.load_from_string(f.read())
+            # actual path could be specified in meta data
+            self.original_file_path = path
 
     def load_from_string(self, s):
         md = markdown.Markdown(extensions=['markdown.extensions.meta', 'markdown.extensions.codehilite',
                                            'markdown.extensions.fenced_code'])
         self.content = md.convert(s)
-        self.load_context(s)
+        self.yaml = s.split('---')[1]
 
-    def load_from_path(self, path):
-        with open(path, 'r', encoding='utf-8') as f:
-            self.load_from_string(f.read())
-            self.md_path = path
-
-    # due to markdown's terrible implementation of yaml metadata
-    def load_context(self, s):
-        meta = s.split('---')[1]
-        dataMap = yaml.safe_load(meta)
-        for tag in generate_tag_from_dict(dataMap):
+    def load_yaml_tag(self):
+        meta_map = yaml.safe_load(self.yaml)
+        for tag in generate_tag_from_dict(meta_map, []):
             self._handle_tag(tag)
 
+    def run_processor(self):
+        for processor in settings.page_processors:
+            processor.process(self._site, self)
+
     def _handle_tag(self, tag):
-        handler = posts_handlers[tag.path] if tag.path in posts_handlers else settings.default_post_handlers
-        handler.handle(tag, self)
-
-    def fix_post_path(self):
-        if self.path is None:
-            file_name = os.path.basename(self.md_path)
-            file_name = os.path.splitext(file_name)[0] + ".html"
-            m = re.match(r'(\d{4}-\d{2}-\d{2})-(.*)', file_name)
-            if m is None:
-                print 'invalid filename'
-            date = m.group(1)
-            post_name = m.group(2)
-            path = os.path.join(POSTS_DIR, date, post_name)
-            self.path = path
-
-    def fix_page_path(self):
-        if self.path is None:
-            self.path = os.path.join(os.path.splitext(self.md_path[len(_SITE_DIR) + 1:])[0] + '.html')
+        handler = page_handlers[tag.path] if tag.path in page_handlers else settings.default_page_handlers
+        handler.handle(tag, self._site, self)
 
     def render(self, site):
-        return
         # some content its self might contain template, such as index.html
         rtemplate = Environment(loader=BaseLoader).from_string(self.content)
         self.rendered_content = rtemplate.render(site=site)
         while self.layout is not None:
             template = ENV.get_template("{}.html".format(self.layout))
             self.layout = None
-            self.rendered_content = template.render(content=self.rendered_content,
+            self.rendered_content = template.render(site=site, content=self.rendered_content,
                                                     **{k: w for k, w in self.iteritems() if k != 'content'})
             md = markdown.Markdown(extensions=['markdown.extensions.meta', 'markdown.extensions.codehilite',
                                                'markdown.extensions.fenced_code'])
             self.rendered_content = md.convert(self.rendered_content)
-            self.update(clean_dict(md.Meta))
+            new_meta = clean_dict(md.Meta)
+            for tag in generate_tag_from_dict(new_meta, []):
+                self._handle_tag(tag)
 
     def save_to_file(self):
-        return
         save_path = os.path.join(SITE_DIR, self.path)
         if not os.path.exists(os.path.dirname(save_path)):
             try:
@@ -184,6 +171,8 @@ class Poge(Dict):
         with open(save_path, "w", encoding="utf-8") as output:
             output.write(self.rendered_content)
 
+    def __repr__(self):
+        return self.title
 
 
 def clean_dict(dic):
@@ -202,9 +191,11 @@ def clean_dir_and_move_assets():
 
 
 def build_site():
-    site = SiteContext()
-    site.load_context_from_config()
-
+    clean_dir_and_move_assets()
+    site = Site()
+    site.configuration()
     site.collect_poges()
+    site.run_processor()
     site.generate_site()
     print site
+    return site

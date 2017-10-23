@@ -2,6 +2,7 @@
 layout: post
 title:  Introducing Tale
 author: Chester
+category: default
 ---
 
 

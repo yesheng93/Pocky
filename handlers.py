@@ -1,19 +1,17 @@
-class TagHandler(object):
+class SiteTagHandler(object):
     path = None
 
     @staticmethod
-    def handle(tag, context):
+    def handle(tag, site_context):
         raise NotImplementedError
 
 
-class DefaultTagHandler(TagHandler):
+class PageTagHandler(object):
+    path = None
+
     @staticmethod
-    def handle(tag, site_context):
-        create_dictionary_recursively(site_context, tag.path, tag.value)
-
-
-DefaultPogeTagHandler = DefaultTagHandler
-DefaultSiteTagHandler = DefaultTagHandler
+    def handle(tag, site_context, page_contex):
+        raise NotImplementedError
 
 
 def create_dictionary_recursively(dic, path, value):
@@ -25,14 +23,30 @@ def create_dictionary_recursively(dic, path, value):
     dic[paths[-1]] = value
 
 
-class PostCategoryHandler(TagHandler):
+"""
+handlers starts here
+"""
+
+
+class DefaultSiteTagHandler(SiteTagHandler):
+    @staticmethod
+    def handle(tag, site_context):
+        create_dictionary_recursively(site_context, tag.path, tag.value)
+
+
+class DefaultPageTagHandler(SiteTagHandler):
+    @staticmethod
+    def handle(tag, site_context, page_contex):
+        create_dictionary_recursively(page_contex, tag.path, tag.value)
+
+
+class PostCategoryHandler(DefaultPageTagHandler):
     path = '/category'
 
     @staticmethod
-    def handle(tag, post_context):
-        site = post_context.site
-        if 'category' not in site:
-            site.category = {}
-        if tag.value not in site.category:
-            site.category[tag.value] = []
-        site.category[tag.value].append(post_context)
+    def handle(tag, site_context, page_contex):
+        if 'category' not in site_context:
+            site_context.category = {}
+        if tag.value not in site_context.category:
+            site_context.category[tag.value] = []
+        site_context.category[tag.value].append(page_contex)
